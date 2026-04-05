@@ -1,0 +1,132 @@
+/*
+ * 20250001 홍길동 (학번 이름)
+ * 본인은 이 소스파일을 다른 사람의 소스를 복사하지 않고 직접 작성하였습니다.
+ *
+ * 과제 19 - 문제 1: DFS (Depth First Search)
+ */
+
+#define _CRT_SECURE_NO_WARNINGS
+#include <stdio.h>
+#include <stdlib.h>
+
+// 메모리 할당 매크로
+#define MALLOC(p, s) \
+	if (!((p) = malloc(s))) { \
+		fprintf(stderr, "Insufficient memory"); \
+		exit(EXIT_FAILURE); \
+	}
+
+#define MAX_VERTICES 50
+#define FALSE 0
+#define TRUE 1
+
+// --- 그래프 노드 구조체 정의 ---
+typedef struct node* nodePointer;
+typedef struct node {
+    int vertex;
+    nodePointer link;
+} node;
+
+// --- 전역 변수 ---
+nodePointer adjLists[MAX_VERTICES] = { NULL }; // 인접 리스트 헤더 배열
+short int visited[MAX_VERTICES]; // 방문 기록 배열
+int n; // 전체 정점의 수
+
+// --- 함수 원형 선언 ---
+void insertEdge(int u, int v);
+void printAdjList(int n);
+void dfs(int v);
+void reset_visited(void);
+
+// --- main 함수 ---
+int main(void) {
+    FILE* fp;
+    int e; // 간선의 수
+    int u, v; // 간선을 구성하는 두 정점
+
+    // 1. 파일 열기
+    if ((fp = fopen("input.txt", "r")) == NULL) {
+        fprintf(stderr, "Cannot open input.txt\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // 2. 정점 및 간선 수 읽기 (과제 19의 input.txt 형식)
+    fscanf(fp, "%d %d", &n, &e);
+
+    // 3. 인접 리스트 구성 (무방향 그래프)
+    for (int i = 0; i < e; i++) {
+        fscanf(fp, "%d %d", &u, &v);
+        insertEdge(u, v);
+        insertEdge(v, u); // 무방향 그래프이므로 양방향으로 추가
+    }
+    fclose(fp);
+
+    // 4. 인접 리스트 출력
+    printf("<<<<<<<<<<<<< Adjacency List >>>>>>>>>>>\n");
+    printAdjList(n);
+
+    // 5. DFS 수행 및 출력
+    printf("\n<<<<<<<<<<<<< Depth First Search >>>>>>>>>>>\n");
+    for (int i = 0; i < n; i++) {
+        reset_visited(); // 각 정점_별_ DFS를 위해 방문 배열 초기화
+        printf("dfs<%d>: ", i);
+        dfs(i);
+        printf("\n");
+    }
+
+    return 0;
+}
+
+/**
+ * @brief 간선 (u, v)를 인접 리스트에 추가 (u -> v)
+ * 과제 18 (1.c)의 함수
+ */
+void insertEdge(int u, int v) {
+    nodePointer newNode;
+    MALLOC(newNode, sizeof(*newNode));
+    newNode->vertex = v;
+    newNode->link = adjLists[u]; // 헤더 뒤(맨 앞)에 삽입
+    adjLists[u] = newNode;
+}
+
+/**
+ * @brief 인접 리스트 전체를 출력
+ * 과제 18 (1.c)의 함수
+ */
+void printAdjList(int n) {
+    for (int i = 0; i < n; i++) {
+        printf("graph[%d]: ", i); // 과제 19 출력 형식에 맞게 "adjList" -> "graph"
+        nodePointer current = adjLists[i];
+        while (current) {
+            printf("%d ", current->vertex);
+            current = current->link;
+        }
+        printf("\n");
+    }
+}
+
+/**
+ * @brief v를 시작으로 깊이 우선 탐색(DFS) 수행 (재귀)
+ * (Program 6.1)
+ */
+void dfs(int v) {
+    nodePointer w;
+    visited[v] = TRUE; // 1. 방문 표시
+    printf("%5d", v);   // 2. 방문 정점 출력 (과제 출력 예시에 맞게 %5d 사용)
+
+    // 3. 인접한 모든 정점 w에 대해
+    for (w = adjLists[v]; w; w = w->link) {
+        if (!visited[w->vertex]) { // 4. 아직 방문하지 않았다면
+            dfs(w->vertex);        // 5. w에서 다시 DFS 시작
+        }
+    }
+}
+
+/**
+ * @brief 전역 visited 배열을 모두 FALSE(0)로 초기화
+ */
+void reset_visited(void) {
+    for (int i = 0; i < n; i++) {
+        visited[i] = FALSE;
+    }
+}

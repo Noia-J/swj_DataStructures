@@ -1,0 +1,247 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// MALLOC 매크로: 동적 메모리 할당 및 오류 처리
+#define MALLOC(p, s) \
+	if (!((p) = malloc(s))) { \
+		fprintf(stderr, "Insufficient memory"); \
+		exit(EXIT_FAILURE); \
+	}
+
+// COMPARE 매크로: 두 정수 비교
+#define COMPARE(x, y) (((x) < (y)) ? -1 : ((x) == (y)) ? 0 : 1)
+
+// --- 구현 세부 사항 ①: 다항식 노드 구조체 정의 ---
+typedef struct polyNode *polyPointer;
+//polyPointer 타입(즉, struct polyNode 구조체를 가리키는 포인터)의 변수 newNode를 선언하고, getNode() 함수를 호출해서
+얻은 (새로 할당되거나 재사용되는) polyNode 구조체의 메모리 주소를 그 newNode 변수에 즉시 할당(저장)합니다
+typedef struct polyNode {
+    int coef;
+    int expon;
+    polyPointer link;
+} polyNode;
+
+// --- 구현 세부 사항 ① & ③: 전역 변수 선언 ---
+polyPointer a = NULL, b = NULL, c = NULL; // 헤더 노드를 가진 다항식 (원형 연결 리스트)
+polyPointer lastA = NULL, lastB = NULL;    // 다항식 a와 b에 대한 last 포인터
+polyPointer avail = NULL;                 // 노드 풀 (체인)
+
+// --- 함수 프로토타입 선언 ---
+polyPointer getNode(void);
+void retNode(polyPointer node);
+void erase(polyPointer *ptr);
+void cerase(polyPointer *ptr);
+void attach(int coefficient, int exponent, polyPointer *ptr);
+void inputPolyCL(char *filename, polyPointer *p_header, polyPointer *p_last);
+void printCList(polyPointer header);
+polyPointer cpadd(polyPointer a, polyPointer b);
+
+// --- 프로그램 시작점 ---
+int main(void) {
+    char file_a[] = "a.txt";
+    char file_b[] = "b.txt";
+
+    // ① inputPolyCL 함수 2회 호출하여 a, b 생성 (헤더 노드 포함, last 포인터 유지)
+    inputPolyCL(file_a, &a, &lastA);
+    inputPolyCL(file_b, &b, &lastB);
+
+    // ② printCList 호출하여 a, b 정보 출력
+    printf("      a :");
+    printCList(a);
+    printf("      b :");
+    printCList(b);
+
+    // ③ cpadd 호출하여 c = a + b 계산
+    c = cpadd(a, b);
+
+    // ④ printCList 호출하여 c 정보 출력
+    printf("  a+b=c :");
+    printCList(c);
+
+    // ⑤ cerase 3번 호출하여 a, b, c 노드를 avail에 반납
+    cerase(&a);
+    cerase(&b);
+    cerase(&c);
+
+    // ⑥ erase 호출하여 avail 리스트의 모든 노드 메모리 해제
+    erase(&avail);
+
+    return 0;
+}
+
+// --- 함수 정의 ---
+
+/**
+ * @brief 노드 풀(avail)에서 노드를 가져오거나 새로 할당 (Program 4.12 기반)
+ */
+polyPointer getNode(void) {
+    polyPointer node;
+    if (avail) { // avail 리스트에 노드가 있으면
+        node = avail;
+        avail = avail->link;
+    } else { // avail 리스트가 비어있으면 새로 할당
+        MALLOC(node, sizeof(*node));
+    }
+    return node;
+}
+
+/**
+ * @brief 사용하지 않는 노드를 노드 풀(avail)에 반환 (Program 4.13 기반)
+ */
+void retNode(polyPointer node) {
+    node->link = avail;
+    avail = node;
+}
+
+/**
+ * @brief 체인으로 구현된 리스트(avail)의 모든 노드 메모리를 해제 (Program 4.11 기반)
+ */
+void erase(polyPointer *ptr) {
+    polyPointer temp;
+    while (*ptr) {
+        temp = *ptr;
+        *ptr = (*ptr)->link;
+        free(temp); // malloc으로 할당된 메모리 해제
+    }
+}
+
+/**
+ * @brief 원형 연결 리스트의 모든 노드를 노드 풀(avail)에 반환 (Program 4.14 기반)
+ * @param ptr 원형 리스트의 헤더 노드를 가리키는 포인터의 주소
+ */
+void cerase(polyPointer *ptr) {
+    polyPointer temp;
+    if (*ptr) { // 리스트가 NULL이 아니면 (헤더 노드가 존재하면)
+        temp = (*ptr)->link; // 첫 번째 실제 노드 (또는 헤더 자신)
+        (*ptr)->link = avail; // 마지막 노드가 avail 리스트를 가리키도록 연결
+        avail = temp;        // avail의 시작을 리스트의 시작으로 변경
+        *ptr = NULL;         // 리스트 포인터를 NULL로 설정
+    }
+}
+
+/**
+ * @brief 다항식의 마지막에 새 항을 추가 (Program 4.10 수정: getNode 사용, int coef)
+ * @param ptr 현재 마지막 노드를 가리키는 포인터의 주소 (함수 실행 후 새 마지막 노드를 가리킴)
+ */
+void attach(int coefficient, int exponent, polyPointer *ptr) {
+    polyPointer temp = getNode(); // MALLOC 대신 getNode 사용
+    temp->coef = coefficient;
+    temp->expon = exponent;
+    (*ptr)->link = temp; // 현재 마지막 노드가 새 노드를 가리킴
+    *ptr = temp;         // ptr이 새 마지막 노드를 가리키도록 업데이트
+}
+
+/**
+ * @brief 파일로부터 데이터를 읽어 헤더 노드를 가진 원형 연결 리스트 다항식 생성
+ * 'a' 형식은 앞에 추가, 'd' 형식은 뒤에 추가하며 last 포인터 관리
+ */
+void inputPolyCL(char *filename, polyPointer *p_header, polyPointer *p_last) {
+    FILE *fp = fopen(filename, "r");
+    if (!fp) {
+        fprintf(stderr, "Cannot open file %s\n", filename);
+        exit(EXIT_FAILURE);
+    }
+
+    char format;
+    int coef, expon;
+
+    // 1. 헤더 노드 생성 및 초기화
+    *p_header = getNode();
+    (*p_header)->expon = -1; // 헤더 노드는 지수 -1로 구분
+    (*p_header)->link = *p_header; // 자신을 가리키는 원형 리스트
+    *p_last = *p_header; // 초기 상태에서는 last도 헤더를 가리킴
+
+    fscanf(fp, " %c", &format); // 'a' 또는 'd' 형식 읽기
+
+    while (fscanf(fp, "%d %d", &coef, &expon) == 2) {
+        polyPointer newNode = getNode();
+        newNode->coef = coef;
+        newNode->expon = expon;
+
+        if (format == 'd') { // 내림차순('d'): 리스트의 끝(헤더 앞)에 추가
+            newNode->link = *p_header; // 새 노드가 헤더를 가리킴
+            (*p_last)->link = newNode; // 이전 마지막 노드가 새 노드를 가리킴
+            *p_last = newNode;         // last 포인터 업데이트
+        } else { // 오름차순('a'): 리스트의 시작(헤더 다음)에 추가
+            newNode->link = (*p_header)->link; // 새 노드가 기존 첫 노드를 가리킴
+            (*p_header)->link = newNode;      // 헤더가 새 노드를 가리킴
+            // 만약 이것이 첫 번째로 추가된 노드라면 last 포인터도 업데이트
+            if (*p_last == *p_header) {
+                *p_last = newNode;
+            }
+        }
+    }
+    fclose(fp);
+}
+
+/**
+ * @brief 헤더 노드를 가진 원형 연결 리스트 다항식을 출력 (실행 예시 형식)
+ * @param header 다항식의 헤더 노드 포인터
+ */
+void printCList(polyPointer header) {
+    if (!header || header->link == header) { // 헤더가 없거나 리스트가 비어있으면
+        printf("\n");
+        return;
+    }
+    polyPointer current = header->link; // 첫 번째 실제 노드부터 시작
+    while (current != header) {        // 헤더로 돌아올 때까지 반복
+        printf(" %+d", current->coef);
+        if (current->expon != 0) {
+            printf("x^%d", current->expon);
+        }
+        current = current->link;
+    }
+    printf("\n");
+}
+
+/**
+ * @brief 헤더 노드를 가진 두 원형 연결 리스트 다항식 a, b를 더해 c를 반환 (Program 4.15 기반)
+ */
+polyPointer cpadd(polyPointer a, polyPointer b) {
+    polyPointer startA, c, lastC;
+    int sum;
+    int done = 0; // FALSE에 해당
+
+    startA = a;       // a의 시작(헤더) 기록
+    a = a->link;      // a를 첫 번째 실제 노드로 이동
+    b = b->link;      // b를 첫 번째 실제 노드로 이동
+
+    c = getNode();    // 결과 다항식 c의 헤더 노드 생성
+    c->expon = -1;
+    lastC = c;        // c의 마지막 노드를 가리킬 포인터 초기화
+
+    do {
+        switch (COMPARE(a->expon, b->expon)) {
+            case -1: // a->expon < b->expon
+                attach(b->coef, b->expon, &lastC);
+                b = b->link;
+                break;
+            case 0: // a->expon == b->expon
+                // a가 헤더로 돌아왔는지 확인 (원형 리스트 순회 완료 체크)
+                if (startA == a) {
+                    done = 1; // TRUE
+                } else {
+                    sum = a->coef + b->coef;
+                    if (sum) attach(sum, a->expon, &lastC);
+                    a = a->link;
+                    b = b->link;
+                }
+                break;
+            case 1: // a->expon > b->expon
+                attach(a->coef, a->expon, &lastC);
+                a = a->link;
+                break;
+        }
+    } while (!done); // a가 한 바퀴 돌 때까지
+
+    // b에 남은 항들 추가 (b는 아직 헤더에 도달하지 않았을 수 있음)
+    // 원형 리스트이므로 b != b->link 가 아닌, b->expon != -1 로 체크해야 함
+    while(b->expon != -1) {
+         attach(b->coef, b->expon, &lastC);
+         b = b->link;
+    }
+
+    lastC->link = c; // 결과 리스트 c를 원형으로 만듦
+    return c;
+}

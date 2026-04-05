@@ -1,0 +1,104 @@
+/**
+ * @file 1.c (프로젝트 1)
+ * @brief 자료구조응용 18: Adjacency List 생성
+ * @details 파일 입력을 받아 무방향/방향 그래프를 인접 리스트로 구현하고 출력합니다.
+ * 학번: [본인 학번]
+ * 이름: [본인 이름]
+ * 본인은 이 소스 파일을 다른 사람의 소스를 복사하지 않고 직접 작성하였습니다.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+
+// MALLOC 매크로 정의 (이전 과제 활용)
+#define MALLOC(p, s) \
+	if (!((p) = malloc(s))) { \
+		fprintf(stderr, "Insufficient memory"); \
+		exit(EXIT_FAILURE); \
+	}
+
+#define MAX_VERTICES 50 // 최대 정점 수 (임의로 설정)
+
+[cite_start]// --- 인접 리스트 노드 구조체 정의 [cite: 7427-7435] ---
+typedef struct node *nodePointer;
+typedef struct node {
+    int vertex; // data 필드 대신 vertex 사용
+    nodePointer link;
+} node;
+
+[cite_start]// 각 정점의 리스트 시작을 가리키는 헤드 노드 배열 [cite: 7429]
+nodePointer adjLists[MAX_VERTICES] = {NULL};
+
+// --- 함수 프로토타입 ---
+void insertEdge(int u, int v);
+void printAdjList(int n);
+
+/**
+ * @brief 프로그램의 시작점
+ */
+int main(void) {
+    FILE *fp;
+    char type; // 'u' (undirected) 또는 'd' (directed)
+    int n, e;  // 정점(vertex) 수, 간선(edge) 수
+    int u, v;  // 간선을 구성하는 두 정점
+
+    if ((fp = fopen("input.txt", "r")) == NULL) {
+        fprintf(stderr, "Cannot open input.txt\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // ① 그래프 종류, 정점, 간선의 수를 입력받음
+    fscanf(fp, " %c %d %d", &type, &n, &e);
+
+    // ② 그래프 종류에 따라 간선을 하나씩 입력받으면서 인접리스트를 구성
+    for (int i = 0; i < e; i++) {
+        fscanf(fp, "%d %d", &u, &v);
+
+        // 요구사항: 항상 헤더노드가 가리키는 첫 노드로 입력
+        insertEdge(u, v);
+        
+        // 무방향 그래프(undirected)인 경우, 반대 방향 간선도 추가
+        if (type == 'u') {
+            insertEdge(v, u);
+        }
+    }
+    fclose(fp);
+
+    // ③ 각 정점에 대해 부속된 간선(인접 리스트)을 출력
+    printf("<<<<<<<<<<<<< Adjacency List >>>>>>>>>>>\n");
+    printAdjList(n);
+
+    // 메모리 해제 (선택 사항)
+    // ...
+
+    return 0;
+}
+
+/**
+ * @brief 인접 리스트에 간선을 삽입 (항상 리스트의 맨 앞에 삽입)
+ * @param u 간선의 시작 정점
+ * @param v 간선의 끝 정점
+ */
+void insertEdge(int u, int v) {
+    nodePointer newNode;
+    MALLOC(newNode, sizeof(*newNode));
+    newNode->vertex = v;
+    newNode->link = adjLists[u]; // 기존의 첫 노드를 새 노드의 다음으로 연결
+    adjLists[u] = newNode;       // 헤드 포인터가 새 노드를 가리키도록 변경
+}
+
+/**
+ * @brief 모든 정점의 인접 리스트를 출력
+ * @param n 총 정점의 수
+ */
+void printAdjList(int n) {
+    for (int i = 0; i < n; i++) {
+        printf("adjList[%d]: ", i);
+        nodePointer current = adjLists[i];
+        while (current) {
+            printf("%d ", current->vertex);
+            current = current->link;
+        }
+        printf("\n");
+    }
+}

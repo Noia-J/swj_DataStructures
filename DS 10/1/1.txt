@@ -1,0 +1,119 @@
+// strcpy, fscanf 등 C 표준 라이브러리 함수 사용 시 발생하는 보안 경고를 비활성화합니다.
+#define _CRT_SECURE_NO_WARNINGS
+#include <stdio.h>
+#include <stdlib.h> // exit() 함수 사용을 위해 포함
+
+// --- 상수 정의 ---
+#define MAX_STACK_SIZE 100 // 스택의 최대 크기
+#define MAX_EXPR_SIZE 80   // 수식 문자열의 최대 길이
+
+// --- 토큰(token)의 종류를 나타내는 열거형 정의 ---
+// lparen, rparen은 이 문제에서 사용되지 않지만, 일반적인 수식 처리를 위해 포함될 수 있습니다.
+typedef enum {
+    lparen, rparen, plus, minus, times, divide, mod, eos, operand
+} precedence;
+
+// --- 전역 변수 선언 ---
+int stack[MAX_STACK_SIZE];    // 피연산자를 저장할 정수형 스택
+int top = -1;                 // 스택의 최상단을 가리키는 인덱스, -1은 스택이 비어있음을 의미
+char expr[MAX_EXPR_SIZE];     // 파일에서 읽어온 후위 표기식을 저장할 문자 배열
+
+// --- 스택 기본 함수 ---
+
+// 스택에 정수 값을 추가하는 함수
+void push(int item) {
+    if (top >= MAX_STACK_SIZE - 1) { // 스택이 가득 찼는지 확인
+        fprintf(stderr, "Stack is full.\n");
+        exit(EXIT_FAILURE); // 프로그램 강제 종료
+    }
+    stack[++top] = item; // top을 1 증가시킨 후, 해당 위치에 item 저장
+}
+
+// 스택에서 정수 값을 꺼내는 함수
+int pop() {
+    if (top == -1) { // 스택이 비어있는지 확인
+        fprintf(stderr, "Stack is empty.\n");
+        exit(EXIT_FAILURE); // 프로그램 강제 종료
+    }
+    return stack[top--]; // 현재 top 위치의 값을 반환한 후, top을 1 감소
+}
+
+// --- 핵심 로직 함수 (문제에서 제공된 코드) ---
+
+/**
+ * @brief 전역 변수 expr에서 문자 하나를 가져와 토큰의 종류를 반환하는 함수
+ * @param symbol 토큰의 문자(char)를 저장할 포인터
+ * @param n 현재 읽고 있는 수식(expr)의 인덱스를 가리키는 포인터
+ * @return 토큰의 종류 (precedence 열거형 값)
+ */
+precedence getToken(char* symbol, int* n) {
+    // n이 가리키는 인덱스의 문자를 symbol에 저장하고, n을 1 증가시킴
+    *symbol = expr[(*n)++];
+    switch (*symbol) {
+        case '+': return plus;
+        case '-': return minus;
+        case '/': return divide;
+        case '*': return times;
+        case '%': return mod;
+        case '\0': return eos;    // '\0'는 문자열의 끝(End Of String)을 의미
+        default: return operand; // 위 연산자에 해당하지 않으면 숫자로 간주
+    }
+}
+
+/**
+ * @brief 전역 변수 expr에 저장된 후위 표기식을 계산하는 메인 함수
+ * @return 최종 계산 결과 (정수)
+ */
+int eval() {
+    precedence token;   // 현재 토큰의 종류를 저장할 변수
+    char symbol;        // 현재 토큰의 문자 값을 저장할 변수
+    int op1, op2;       // 스택에서 꺼낸 두 피연산자를 저장할 변수
+    int n = 0;          // expr 배열을 순회할 인덱스
+    top = -1;           // 계산 시작 전 스택을 비움
+
+    token = getToken(&symbol, &n); // 첫 번째 토큰을 가져옴
+    while (token != eos) { // 수식의 끝에 도달할 때까지 반복
+        if (token == operand) { // 토큰이 피연산자(숫자)인 경우
+            // 문자 '0'을 빼서 실제 정수 값으로 변환 (예: '5' - '0' = 5)
+            push(symbol - '0');
+        }
+        else { // 토큰이 연산자인 경우
+            // 연산을 위해 스택에서 피연산자 두 개를 꺼냄 (순서 중요: op2가 먼저)
+            op2 = pop();
+            op1 = pop();
+            switch (token) { // 연산자 종류에 따라 계산 수행
+                case plus:  push(op1 + op2); break;
+                case minus: push(op1 - op2); break;
+                case times: push(op1 * op2); break;
+                case divide:push(op1 / op2); break;
+                case mod:   push(op1 % op2); break;
+                default: break;
+            }
+        }
+        token = getToken(&symbol, &n); // 다음 토큰을 가져옴
+    }
+    return pop(); // 모든 계산이 끝난 후 스택에 남은 최종 결과값을 반환
+}
+
+// --- 프로그램 시작점 ---
+int main(void) {
+    FILE* fp = NULL; // 파일 포인터 선언
+
+    // 1. input.txt 파일을 읽기 모드("r")로 열기
+    fp = fopen("input.txt", "r");
+    if (fp == NULL) { // 파일 열기에 실패하면 에러 메시지 출력 후 종료
+        fprintf(stderr, "Cannot open the file: input.txt\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // 2. 파일에서 후위 표기식을 읽어 전역 변수 expr에 저장
+    // (입력 주의사항 1번 방법 사용, 수식에 공백이 없다고 가정)
+    fscanf(fp, "%s", expr);
+    fclose(fp); // 파일 사용이 끝났으므로 닫아줌
+
+    // 3. 실행 예와 동일한 형식으로 입력된 수식과 결과 값 출력
+    printf("postfix expression : %s\n", expr);
+    printf("the evaluation value : %d\n", eval());
+
+    return 0; // 프로그램 정상 종료
+}

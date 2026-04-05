@@ -1,0 +1,157 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+// MALLOC 매크로: 동적 메모리 할당과 에러 처리를 동시에 수행
+#define MALLOC(p, s) \
+	if (!((p) = malloc(s))) { \
+		fprintf(stderr, "Insufficient memory"); \
+		exit(EXIT_FAILURE); \
+	}
+
+// --- 구조체 정의 (구현 세부사항 ①) ---
+typedef struct listNode *listPointer;
+typedef struct listNode {
+    int data;
+    listPointer link;
+} listNode;
+
+// 전역 변수로 연결 리스트의 시작을 가리키는 포인터 선언
+listPointer first = NULL;
+
+// --- 함수 프로토타입 선언 ---
+void find(listPointer first, listPointer *x, int data);
+void insert(listPointer *first, listPointer x, int data);
+void delete(listPointer *first, listPointer trail, listPointer x);
+void printList(listPointer first);
+
+/**
+ * @brief 데이터가 삽입될 위치의 '이전 노드'를 찾는 함수 (함수 정의 ③ 완성)
+ * @param first 리스트의 시작 포인터
+ * @param x 찾은 이전 노드의 주소를 저장할 포인터
+ * @param data 삽입할 데이터
+ */
+void find(listPointer first, listPointer *x, int data) {
+    listPointer pre = NULL;
+    listPointer trav = first;
+
+    // trav가 NULL이 아니고, trav의 데이터가 삽입할 data보다 작을 동안 순회
+    while (trav && trav->data < data) {
+        pre = trav;
+        trav = trav->link;
+    }
+    // 루프가 끝나면 pre는 삽입 위치 바로 이전의 노드를 가리킴
+    *x = pre;
+}
+
+/**
+ * @brief 주어진 노드 x 뒤에 새로운 노드를 삽입하는 함수 (함수 정의 ③ 완성)
+ * @param first 리스트의 시작 포인터의 주소 (첫 노드로 삽입될 경우를 위함)
+ * @param x 이전 노드를 가리키는 포인터
+ * @param data 삽입할 데이터
+ */
+void insert(listPointer *first, listPointer x, int data) {
+    // 새 노드 할당 및 데이터 저장
+    listPointer temp;
+    MALLOC(temp, sizeof(*temp));
+    temp->data = data;
+
+    if (*first) { // non-empty list
+        if (x) { // 두 번째 노드 이후로 추가 (중간 삽입)
+            temp->link = x->link;
+            x->link = temp;
+        } else { // 첫 노드로 추가
+            temp->link = *first;
+            *first = temp;
+        }
+    } else { // empty list
+        temp->link = NULL;
+        *first = temp;
+    }
+}
+
+/**
+ * @brief 노드 x를 리스트에서 삭제하는 함수 (참고 자료 활용)
+ * @param first 리스트의 시작 포인터의 주소
+ * @param trail 삭제할 노드(x)의 이전 노드
+ * @param x 삭제할 노드
+ */
+void delete(listPointer *first, listPointer trail, listPointer x) {
+    if (trail) { // 삭제할 노드가 첫 노드가 아닐 경우
+        trail->link = x->link;
+    } else { // 첫 노드를 삭제할 경우
+        *first = (*first)->link;
+    }
+    free(x); // 노드의 메모리 해제
+}
+
+/**
+ * @brief 리스트의 모든 노드 데이터를 출력하는 함수 (한 줄에 10개씩 수정)
+ * @param first 리스트의 시작 포인터
+ */
+void printList(listPointer first) {
+    printf("The ordered list contains:\n");
+    int count = 0;
+    for (; first; first = first->link) {
+        printf("%d ", first->data);
+        count++;
+        if (count % 10 == 0) {
+            printf("\n");
+        }
+    }
+    // 마지막 줄에 개행이 없었다면 추가
+    if (count % 10 != 0) {
+        printf("\n");
+    }
+}
+
+
+int main(void) {
+    int data;
+    listPointer x; // insert position or delete position
+    FILE *fp;
+
+    // --- ① 입력 파일로부터 데이터를 입력받으면서 정렬된 체인 만들기 ---
+    if ((fp = fopen("input.txt", "r")) == NULL) {
+        fprintf(stderr, "cannot open the file");
+        exit(EXIT_FAILURE);
+    }
+    
+    // 파일 끝(EOF)에 도달할 때까지 정수를 하나씩 읽음
+    while (fscanf(fp, "%d", &data) != EOF) {
+        find(first, &x, data);
+        insert(&first, x, data);
+    }
+    fclose(fp);
+
+    // --- ② 체인의 처음부터 끝까지 노드 데이터를 출력 ---
+    printList(first);
+
+    // --- ③ 성적이 50점 이하인 노드를 연결 리스트에서 삭제 ---
+    listPointer ptr = first;
+    listPointer trail = NULL;
+    while (ptr != NULL) {
+        if (ptr->data <= 50) {
+            listPointer to_delete = ptr;
+            ptr = ptr->link; // ptr을 먼저 다음 노드로 이동
+            delete(&first, trail, to_delete);
+            // trail은 그대로 유지 (다음 노드도 삭제 대상일 수 있으므로)
+        } else {
+            trail = ptr; // 삭제 대상이 아니면 trail과 ptr을 함께 이동
+            ptr = ptr->link;
+        }
+    }
+    
+    // --- ④ 체인의 처음부터 끝까지 노드 데이터를 출력 (삭제 후) ---
+    printf("\nAfter deleting nodes with data less than and equal to 50\n");
+    printList(first);
+
+    // --- ⑤ 체인의 모든 노드를 삭제 (메모리 해제) ---
+    listPointer current = first;
+    while (current != NULL) {
+        listPointer next = current->link;
+        free(current);
+        current = next;
+    }
+
+    return 0;
+}

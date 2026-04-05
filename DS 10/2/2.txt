@@ -1,0 +1,143 @@
+#define _CRT_SECURE_NO_WARNINGS
+#include <stdio.h>
+#include <stdlib.h> // exit() 함수 사용
+#include <ctype.h>  // isalpha(), isdigit() 등 문자 처리 함수 (필요 시 사용)
+
+// --- 상수 정의 ---
+#define MAX_STACK_SIZE 100 // 스택의 최대 크기
+#define MAX_EXPR_SIZE 80   // 수식 문자열의 최대 길이
+
+// --- 토큰 종류를 나타내는 열거형 ---
+typedef enum {
+    lparen, rparen, plus, minus, times, divide, mod, eos, operand
+} precedence;
+
+// --- 연산자 우선순위 배열 ---
+// isp: 스택 안에 있을 때의 우선순위 (in-stack precedence)
+// icp: 스택으로 들어올 때의 우선순위 (in-coming precedence)
+// 인덱스 순서: lparen, rparen, plus, minus, times, divide, mod, eos
+int isp[] = { 0, 19, 12, 12, 13, 13, 13, 0 };
+int icp[] = { 20, 19, 12, 12, 13, 13, 13, 0 };
+
+// --- 전역 변수 선언 ---
+precedence stack[MAX_STACK_SIZE]; // 이번에는 연산자의 종류(precedence)를 스택에 저장
+int top = -1;
+char expr[MAX_EXPR_SIZE];
+FILE* fout; // 출력 파일 포인터를 전역으로 선언하여 여러 함수에서 접근 가능
+
+// --- 스택 기본 함수 ---
+void push(precedence item) {
+    if (top >= MAX_STACK_SIZE - 1) {
+        fprintf(stderr, "Stack is full.\n");
+        exit(EXIT_FAILURE);
+    }
+    stack[++top] = item;
+}
+
+precedence pop() {
+    if (top == -1) {
+        // 스택이 비었을 경우, 수식의 끝을 의미하는 eos를 반환하여 오류 방지
+        return eos;
+    }
+    return stack[top--];
+}
+
+// --- 핵심 로직 함수 ---
+
+// 전역 변수 expr에서 문자 하나를 가져와 토큰의 종류를 반환
+precedence getToken(char* symbol, int* n) {
+    *symbol = expr[(*n)++];
+    switch (*symbol) {
+        case '(': return lparen;
+        case ')': return rparen;
+        case '+': return plus;
+        case '-': return minus;
+        case '*': return times;
+        case '/': return divide;
+        case '%': return mod;
+        case '\0': return eos; // 문자열의 끝
+        default: return operand; // 위 경우에 해당하지 않으면 피연산자(알파벳, 숫자)로 간주
+    }
+}
+
+// precedence 토큰을 실제 연산자 문자로 변환하여 화면과 파일에 출력 (요구사항)
+void printToken(precedence token) {
+    char symbol;
+    switch (token) {
+        case plus:  symbol = '+'; break;
+        case minus: symbol = '-'; break;
+        case times: symbol = '*'; break;
+        case divide:symbol = '/'; break;
+        case mod:   symbol = '%'; break;
+        default: return; // 다른 토큰은 출력하지 않음
+    }
+    printf("%c", symbol);      // 1. 화면에 출력
+    fprintf(fout, "%c", symbol); // 2. 파일에 출력
+}
+
+// 중위 표기식을 후위 표기식으로 변환하고 출력하는 메인 함수 (제공된 코드 기반)
+void postfix(void) {
+    char symbol;
+    precedence token;
+    int n = 0;
+    top = 0;
+    stack[0] = eos; // 스택의 가장 바닥에 수식의 끝(eos)을 넣어둠
+
+    // 수식의 끝(eos)에 도달할 때까지 한 토큰씩 읽어 처리
+    for (token = getToken(&symbol, &n); token != eos; token = getToken(&symbol, &n)) {
+        if (token == operand) { // 1. 토큰이 피연산자일 경우
+            printf("%c", symbol);       // 즉시 화면에 출력
+            fprintf(fout, "%c", symbol);  // 즉시 파일에 출력
+        }
+        else if (token == rparen) { // 2. 토큰이 오른쪽 괄호일 경우
+            // 왼쪽 괄호가 나올 때까지 스택에서 연산자를 꺼내 출력
+            while (stack[top] != lparen)
+                printToken(pop());
+            pop(); // 왼쪽 괄호는 출력하지 않고 스택에서 제거
+        }
+        else { // 3. 토큰이 그 외 연산자일 경우
+            // 스택의 top에 있는 연산자의 우선순위(isp)가 현재 토큰의 우선순위(icp)보다 높거나 같은 동안
+            // 스택에서 연산자를 꺼내 출력
+            while (isp[stack[top]] >= icp[token])
+                printToken(pop());
+            push(token); // 현재 토큰을 스택에 push
+        }
+    }
+    // 수식을 모두 읽은 후, 스택에 남아있는 모든 연산자를 출력
+    while ((token = pop()) != eos)
+        printToken(token);
+        
+    printf("\n"); // 마지막에 개행문자 추가
+    fprintf(fout, "\n");
+}
+
+
+int main(void) {
+    FILE* fin = NULL; // 입력 파일 포인터
+
+    // 파일 열기
+    fin = fopen("input.txt", "r");   // 읽기 모드
+    fout = fopen("output.txt", "w"); // 쓰기 모드
+
+    if (fin == NULL || fout == NULL) { // 파일 열기 실패 시
+        fprintf(stderr, "Cannot open files.\n");
+        return 1; // 비정상 종료
+    }
+    
+    // input.txt에서 수식을 읽어 expr 배열에 저장
+    fscanf(fin, "%s", expr);
+
+    // 실행 예와 동일한 형식으로 출력
+    printf("<<<<<<<<<<<< infix to postfix >>>>>>>>>>>>\n");
+    printf("infix expression     : %s\n", expr);
+    printf("postfix expression   : ");
+    
+    // 변환 및 출력 함수 호출
+    postfix();
+
+    // 모든 파일 핸들 닫기
+    fclose(fin);
+    fclose(fout);
+
+    return 0; // 정상 종료
+}
